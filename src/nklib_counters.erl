@@ -323,7 +323,6 @@ basic_test_() ->
     {setup,
      fun() ->
              ?debugFmt("Starting ~p", [?MODULE]),
-             application:ensure_all_started(qdate),
              case start_link() of
                  {error, {already_started, _}} ->
                      ok;

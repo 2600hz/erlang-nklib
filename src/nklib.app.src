@@ -1,12 +1,13 @@
 {application, nklib, [
                       {description, "NetComposer Standard Library"},
-                      {vsn, "0.4.1"},
+                      {vsn, "0.5.0"},
                       {modules, []},
                       {registered, []},
                       {mod, {nklib_app, []}},
                       {applications, [
                                       kernel,
-                                      stdlib
+                                      stdlib,
+                                      elocaltime
                                      ]},
                       {env, []}
                      ]}.

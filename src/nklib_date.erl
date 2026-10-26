@@ -39,7 +39,7 @@
 -type datetime() :: calendar:datetime().
 
 -include("nklib.hrl").
--include_lib("qdate_localtime/include/tz_database.hrl").
+-include_lib("elocaltime/include/elocaltime.hrl").
 
 -compile(inline).
 
@@ -435,8 +435,7 @@ age(Date) ->
 gmt_to_local_calendar(DateGmt, TZ) ->
     case to_epoch(DateGmt, secs) of
         {ok, Epoch} ->
-            qdate_srv:set_timezone(<<"GMT">>),
-            {ok, qdate:to_date(TZ, Epoch)};
+            timezone_call(fun() -> elocaltime:utc2local_datetime(Epoch, to_bin(TZ)) end);
         {error, Error} ->
             {error, Error}
     end.
@@ -465,8 +464,7 @@ local_to_gmt_calendar(DateLocal, TZ) ->
                                                 %lager:error("NKLOG DL ~p", [DateLocal]),
     case to_calendar(DateLocal) of
         {ok, Cal} ->
-            qdate_srv:set_timezone(TZ),
-            {ok, qdate:to_date(<<"GMT">>, Cal)};
+            timezone_call(fun() -> local_timezone_to_utc(Cal, to_bin(TZ)) end);
         {error, Error} ->
             {error, Error}
     end.
@@ -492,9 +490,42 @@ local_to_gmt_3339(DateLocal, TZ) ->
 
 
 %% @private
+%% Keep the generic library independent of Kazoo core. No process-local
+%% qdate timezone is modified by a conversion.
+timezone_call(Fun) ->
+    case whereis(elocaltime_timezone) of
+        undefined ->
+            case elocaltime:start() of
+                ok -> timezone_result(Fun());
+                Error -> Error
+            end;
+        _ -> timezone_result(Fun())
+    end.
+
+timezone_result({error, <<"unknown timezone">>}) -> {error, unknown_tz};
+timezone_result(Result) -> Result.
+
+local_timezone_to_utc(Cal, Zone) ->
+    case elocaltime:civil_lookup(Cal, Zone) of
+        {ok, #civil_lookup{civil_kind = unique, pre = Stamp}} ->
+            {ok, secs_to_calendar(Stamp)};
+        {ok, #civil_lookup{civil_kind = skipped}} ->
+            {error, time_not_exists};
+        {ok, #civil_lookup{civil_kind = repeated, pre = Pre, post = Post}} ->
+            {ok, PreInfo} = elocaltime:absolute_lookup(Pre, Zone),
+            {ok, PostInfo} = elocaltime:absolute_lookup(Post, Zone),
+            [{_, _, Standard} | _] = lists:sort(
+                [{PreInfo#absolute_lookup.is_dst, -Pre, Pre},
+                 {PostInfo#absolute_lookup.is_dst, -Post, Post}]),
+            {ok, secs_to_calendar(Standard)};
+        Error -> Error
+    end.
+
+%% @doc Refresh valid timezone names from the OS TZif files.
+
 store_timezones() ->
-    Zones = [list_to_binary(element(1,TZ)) || TZ <- ?tz_database],
-    nklib_util:do_config_put(nklib_timezones, lists:usort(Zones)).
+    {ok, Zones} = elocaltime:timezones(),
+    nklib_util:do_config_put(nklib_timezones, Zones).
 
 %% @doc
 get_timezones() ->

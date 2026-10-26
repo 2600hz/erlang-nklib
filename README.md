@@ -20,3 +20,20 @@ NkLIB includes a serie of common utilities and services for NetComposer, but pro
 * [**nklib_syntax**](src/nklib_syntax.erl): Syntax and schema processing.
 * [**nklib_throttle**](src/nklib_throttle.erl): Throttle management utilities.
 * [**nklib_util**](src/nklib_util.erl): Over 50 generic functions for UIDs, type conversions, dates, hashes, timers, etc.
+
+## Timezone data
+
+Timezone conversions and validation now use elocaltime and the OS TZif database.
+The public `nklib_date` return shapes are retained. Repeated local times select
+standard time; skipped local times return `{error, time_not_exists}`. No
+process-local qdate timezone is changed. `store_timezones/0` loads the available
+OS names and aliases into the validation list.
+
+Install current `tzdata` and `libstdc++` on the runtime and build the native
+library for its OS/CPU. The Canadian regression tests require tzdata 2026e or
+later. Restart the Erlang VM after updating timezone data because native zone
+objects are cached for the VM lifetime. Set `TZDIR` before VM startup if using
+an alternate database.
+
+KZOO-972 uses the pinned `romanat-ooma/elocaltime` fork while the fixes are
+reviewed for promotion to `2600hz/elocaltime`.
